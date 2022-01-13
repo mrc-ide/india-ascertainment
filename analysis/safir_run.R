@@ -491,6 +491,12 @@ vacc_per_day <- vacc_per_day / sum(squire::get_population("India")$n)
 
 # Now run the scenario
 target_pop = 1e6
-out <- run_india_scenario(Rt_pre_omicron = rt_df_res, lambda_external = 1e-6, R0_date_delta_start = "2021-02-01", vacc_per_day = vacc_per_day, target_pop = target_pop)
+out <- run_india_scenario(Rt_pre_omicron = rt_df_res, lambda_external = 1e-6, target_pop = target_pop,
+                          R0_date_delta_start = "2021-02-01", vacc_per_day = vacc_per_day, dt = 0.2,
+                          tmax_date = "2022-01-01")
+
+# plot attack rate over time. Should be roughly 25% from 2020 wave and then up to 80% after second wave based
+# on the Rt but is not...
 ggplot(out$cols[[1]], aes(timestep+rt_df_res$date[1], cumsum(incidence/target_pop))) +
-  geom_line() + xlim(as.Date(c("2020-04-01", "2022-12-01")))
+  geom_line() + xlim(as.Date(c("2020-04-01", "2022-12-01"))) +
+  ylab("Attack Rate") + xlab("")
