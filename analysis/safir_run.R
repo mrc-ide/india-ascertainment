@@ -438,6 +438,8 @@ run_india_scenario <-
 # ---------------------------------
 
 library(tidyverse)
+devtools::load_all()
+
 stem <- cp_path("archive/india_sub_national/")
 reports_all <- function(task = "india_sub_national", wd = cp_path("")) {
 
