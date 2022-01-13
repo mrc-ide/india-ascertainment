@@ -193,11 +193,11 @@ run_india_scenario <-
     lambda_external <- rep(lambda_external, time_period)
 
     # # delta pulse, spread out hazard of 0.1 over 10 days right before Delta wave
-    t_spread <- 30
+    t_spread <- 10
     lambda_tt <- as.integer(difftime(R0_date_delta_start, R0_t0 - 1))
     lambda_tt <- seq(from = lambda_tt - t_spread/2, to = lambda_tt + t_spread/2, by = 1)
     lambda_external[lambda_tt] <- dnorm(x = lambda_tt, mean = lambda_tt[t_spread/2+1], sd = 3)
-    lambda_external[lambda_tt] <- lambda_external[lambda_tt] / sum(lambda_external[lambda_tt]) * 0.1
+    lambda_external[lambda_tt] <- lambda_external[lambda_tt] / sum(lambda_external[lambda_tt]) * 0.05
     #
     # # second pulse, spread out hazard of 0.01 over 20 days right before 2nd wave
     # #t_spread <- 20
@@ -467,11 +467,8 @@ reports_here <- reports_all()
 reports <- reports_here %>% filter(dur_R == 115)
 lf <- file.path(stem, reports$report_version, "res.rds")
 
-# Get the results for Chhattisgarh, typical of India as a whole
-res <- readRDS(lf[which(reports$state == "Chhattisgarh")])
-
-# get rt trend for this state
-rt_df_res <- rt_df(res)
+# Get the results for Bihar, typical of India as a whole
+res <- readRDS(lf[which(reports$state == "Bihar")])
 
 # get vaccination data for India as a whole
 subnat_vacc <- read.csv("https://data.incovid19.org/csv/latest/cowin_vaccine_data_statewise.csv")
@@ -491,14 +488,18 @@ vacc_per_day <- round(lm(total_vaccinations~0+seq_along(date), subnat_vacc)$coef
 vacc_per_day <- vacc_per_day / sum(squire::get_population("India")$n)
 
 
+# get rt trend for this state
+rt_df_res <- rt_df(res)
+rt_df_res$Rt[1:100] <- rt_df_res$Rt[1:100] * 0.6
+
 # Now run the scenario
-target_pop = 1e6
+target_pop = 1e4
 out <- run_india_scenario(Rt_pre_omicron = rt_df_res, lambda_external = 1e-6, target_pop = target_pop,
-                          R0_date_delta_start = "2021-02-01", vacc_per_day = vacc_per_day, dt = 0.2,
-                          tmax_date = "2022-01-01")
+                          R0_date_delta_start = "2021-04-01", vacc_per_day = vacc_per_day, dt = 0.2,
+                          tmax_date = "2022-12-01")
 
 # plot attack rate over time. Should be roughly 25% from 2020 wave and then up to 80% after second wave based
-# on the Rt but is not...
+# on the Rt but it was not which is why I had to change the Rt in the first 100 days down by 60%
 ggplot(out$cols[[1]], aes(timestep+rt_df_res$date[1], cumsum(incidence/target_pop))) +
-  geom_line() + xlim(as.Date(c("2020-04-01", "2022-12-01"))) +
+  geom_line() + xlim(as.Date(c("2020-02-01", "2022-12-01"))) +
   ylab("Attack Rate") + xlab("")
