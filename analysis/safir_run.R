@@ -490,9 +490,10 @@ vacc_per_day <- vacc_per_day / sum(squire::get_population("India")$n)
 
 # get rt trend for this state
 rt_df_res <- rt_df(res)
+rt_df_res$Rt[1:365] <- rt_df_res$Rt[1:365]*0.775 # required to reign in the first wave
 
 # Now run the scenario
-target_pop <- 1e6
+target_pop <- 5e5
 out <- run_india_scenario(Rt_pre_omicron = rt_df_res, lambda_external = 1e-6, target_pop = target_pop,
                           R0_date_delta_start = "2021-04-01", vacc_per_day = vacc_per_day, dt = 0.2,
                           tmax_date = "2022-12-01")
