@@ -320,6 +320,7 @@ sero$date_end[which(sero$round == 3)] <- "2021-01-06"
 
 saveRDS(sero, cp_path("src/india_sub_national/sero.rds"))
 saveRDS(sero, cp_path("analysis/data/derived/sero.rds"))
+write.csv(sero[,c(1,2,8,9, 12, 13, 14)], cp_path("analysis/data/derived/sero.csv"))
 
 ## --------------------------------
 ## Mortality Reporting Data

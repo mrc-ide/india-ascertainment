@@ -33,12 +33,21 @@ reports_all <- function(task = "india_sub_national", wd = cp_path("")) {
 reports_here <- reports_all()
 
 # pick which reports are being summarised
-# reports <- reports_here %>% filter(dur_R == 222) %>% group_by(state) %>% filter(report_version == max(report_version))
-# lf <- file.path(stem, reports$report_version, "res.rds")
-# l <- file.path(stem, reports$report_version)
-# tfs <- lapply(tail(l, 36), function(x) { readRDS(file.path(x, "proj.rds"))})
-# ind_res <- do.call(rbind, tfs)
-# saveRDS(ind_res, paste0("analysis/data/derived/optimistic_projections_", reports$date[1], ".rds"))
+# Best
+reports <- reports_here %>% filter(dur_R == 222) %>% group_by(state) %>% filter(report_version == max(report_version))
+lf <- file.path(stem, reports$report_version, "res.rds")
+l <- file.path(stem, reports$report_version)
+tfs <- lapply(l, function(x) { readRDS(file.path(x, "proj.rds"))})
+ind_res <- do.call(rbind, tfs)
+saveRDS(ind_res, paste0("analysis/data/derived/optimistic_projections_", reports$date[1], ".rds"))
+
+# Worst
+reports <- reports_here %>% filter(dur_R == 70) %>% group_by(state) %>% filter(report_version == max(report_version))
+lf <- file.path(stem, reports$report_version, "res.rds")
+l <- file.path(stem, reports$report_version)
+tfs <- lapply(tail(l, 36), function(x) { readRDS(file.path(x, "proj.rds"))})
+ind_res <- do.call(rbind, tfs)
+saveRDS(ind_res, paste0("analysis/data/derived/worst_projections_", reports$date[1], ".rds"))
 
 # Central
 reports <- reports_here %>% filter(dur_R == 115) %>% group_by(state) %>% filter(report_version == max(report_version))
@@ -48,13 +57,6 @@ tfs <- lapply(tail(l, 36), function(x) { readRDS(file.path(x, "proj.rds"))})
 ind_res <- do.call(rbind, tfs)
 saveRDS(ind_res, paste0("analysis/data/derived/central_projections_", reports$date[1], ".rds"))
 
-# Worst
-# reports <- reports_here %>% filter(dur_R == 70) %>% group_by(state) %>% filter(report_version == max(report_version))
-# lf <- file.path(stem, reports$report_version, "res.rds")
-# l <- file.path(stem, reports$report_version)
-# tfs <- lapply(tail(l, 36), function(x) { readRDS(file.path(x, "proj.rds"))})
-# ind_res <- do.call(rbind, tfs)
-# saveRDS(ind_res, paste0("analysis/data/derived/worst_projections_", reports$date[1], ".rds"))
 
 ## -----------------------------------------
 ##  3. Downstream Plots
@@ -80,7 +82,7 @@ roll_func <- function(x, det) {
   return(ret)
 }
 
-
+reports <- reports_here %>% filter(dur_R == 115) %>% group_by(state) %>% filter(report_version == max(report_version))
 ind_res <- readRDS(paste0("analysis/data/derived/central_projections_", reports$date[1], ".rds"))
 inf <- ind_res %>%
   filter(r_increase == "No Change") %>%
@@ -154,6 +156,30 @@ sero_cont <- ind_res %>% group_by(date, replicate, state) %>%
   group_by(state) %>% summarise(s = sum(sero_positive)) %>%
   mutate(perc = s/sum(s))
 
+
+sero_state <- ind_res %>% filter(r_increase == "No Change") %>%
+  group_by(date, replicate, state) %>%
+  summarise(symptoms = sum(symptoms, na.rm = TRUE),
+            S = S) %>%
+  left_join(subnat_vacc) %>%
+  group_by(state, replicate) %>%
+  mutate(S = max(S, na.rm = TRUE),
+         sero_positive = roll_func(symptoms, cam:::sero_det(igg_sens = 0.95, igg_scale = 290, igg_conv = 5)),
+         sero_perc = sero_positive/S,
+         all_perc = sero_perc + lag(people_vaccinated/S,14)) %>%
+  filter(date == "2021-07-10") %>%
+  group_by(state) %>%
+  summarise(sero_perc = median(sero_perc),
+            all_perc = median(all_perc))
+
+sero_state[order(sero_state$all_perc, decreasing = TRUE),] %>% as.data.frame()
+
+left_join(sero_state, round4 %>% mutate(state = State.Union.Territory)) %>% na.omit %>%
+  ggplot(aes(all_perc*100, sero)) + geom_point() +
+  ggrepel::geom_text_repel(aes(label = state)) + geom_abline(slope = 1, intercept = 0)
+
+left_join(sero_state, round4 %>% mutate(state = State.Union.Territory)) %>% na.omit %>% mutate(err = abs(sero - all_perc*100)) %>% pull(err) %>% sum
+
 ## ----------------------------------------------------------
 ## Overall India deaths
 ## ----------------------------------------------------------
@@ -180,8 +206,8 @@ gg <- ggplot(deaths, aes(date, y, ymin = ymin, ymax = ymax, color = "Model Predi
   scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", limits = as.Date(c("2020-02-01", max_date))) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   theme_bw() + ylab("Daily Deaths") + xlab("") +
-  geom_line(aes(as.Date(date), estimated_daily_excess_deaths, color = "Economist Inferred"),
-          data = check, inherit.aes = FALSE, linetype = "dashed") +
+  # geom_line(aes(as.Date(date), estimated_daily_excess_deaths, color = "Economist Inferred"),
+  #         data = check, inherit.aes = FALSE, linetype = "dashed") +
   theme(legend.position = "top", axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_color_discrete(name = "Source:")
 
@@ -192,12 +218,12 @@ gg2 <- ggplot(deaths, aes(date, cumsum(y), ymin = cumsum(ymin), ymax = cumsum(ym
   scale_x_date(date_labels = "%b %Y", date_breaks = "3 months", limits = as.Date(c("2020-02-01", max_date))) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   theme_bw() + ylab("Total Deaths") + xlab("") +
-  geom_line(aes(as.Date(date), cumsum(estimated_daily_excess_deaths)*7, color = "Economist Inferred"),
-            data = check, inherit.aes = FALSE, linetype = "dashed") +
+  # geom_line(aes(as.Date(date), cumsum(estimated_daily_excess_deaths)*7, color = "Economist Inferred"),
+  #           data = check, inherit.aes = FALSE, linetype = "dashed") +
   theme(legend.position = "top", axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_color_discrete(name = "Source:")
 
-overall_deaths_gg <- cowplot::plot_grid(gg, gg2, rel_widths = c(1,1), ncol = 2)
+overall_deaths_gg <- cowplot::plot_grid(gg, gg2, rel_widths = c(1,1), ncol = 2, labels = "AUTO")
 save_figs("deaths_national", overall_deaths_gg, 8, 4)
 
 ## --------------------------------
@@ -208,11 +234,13 @@ demog <- readRDS(file.path(here::here(), "src/india_sub_national/demog.rds"))
 pars_init <- readRDS(file.path(here::here(), "src/india_sub_national/pars_init.rds"))
 death_reporting <- readRDS(file.path(here::here(), "analysis/data/derived/death_reporting.rds"))
 sero_df <- readRDS(file.path(here::here(), "src/india_sub_national/sero.rds"))
-reporting_comp <- left_join(as.data.frame(t(as.data.frame(lapply(pars_init$optimistic, "[[", "rf")))) %>%
-            mutate(state = rownames(.)) %>%
-            rename(rf = V1) %>%
-  mutate(state = gsub("\\.", " ", state)),
-  death_reporting)
+
+reporting_comp <- data.frame(
+  rf = unlist(lapply(lf, function(x){median(readRDS(x)$replicate_parameters$rf)})),
+  state = reports$state
+)
+
+reporting_comp <- left_join(reporting_comp, death_reporting)
 reporting_comp$sero_informed <- FALSE
 reporting_comp$sero_informed[reporting_comp$state %in% (sero_df %>% select(state) %>% pull %>% unique())] <- TRUE
 
@@ -229,7 +257,7 @@ reporting_comp <- left_join(reporting_comp, demog %>% group_by(state) %>% summar
 registration_relationship_gg <- ggplot(reporting_comp[which(reporting_comp$sero_informed),], aes(rf, (death_certification/100) * (death_registration/100))) +
   geom_point() + geom_smooth(method = "lm") + theme_bw() + xlab("Inferred Proportion of COVID-19 deaths detected") +
   ylab("Proportion of All Deaths Registered \nand Medically Certified in 2019")
-save_figs("registration_relationship", registration_relationship_gg, 6, 4, root = file.path(here::here(), "analysis/india/plots"))
+save_figs("registration_relationship", registration_relationship_gg, 6, 4, root = file.path(here::here(), "analysis/plots"))
 
 reporting_fractions_inferred_gg <- ggplot(reporting_comp, aes(x = sero_informed, y = rf, label = state)) + geom_point() +
   ggrepel::geom_text_repel(max.overlaps = 100, point.padding = 0.1,min.segment.length = 0.1) +
@@ -238,7 +266,7 @@ reporting_fractions_inferred_gg <- ggplot(reporting_comp, aes(x = sero_informed,
   theme(axis.line = element_line()) +
   xlab("Seroprevalence informed") +
   ylab("% of COVID-19 Deaths Reported")
-save_figs("reporting_fractions_inferred", reporting_fractions_inferred_gg, 10, 8, root = file.path(here::here(), "analysis/india/plots"))
+save_figs("reporting_fractions_inferred", reporting_fractions_inferred_gg, 10, 8, root = file.path(here::here(), "analysis/plots"))
 
 ## --------------------------------
 ## Checks for excess
@@ -338,12 +366,25 @@ get_counterfactual <- function(res_path, forecast = 30) {
 }
 
 reports_central <- reports_here %>% filter(dur_R == 115) %>% group_by(state) %>% filter(report_version == max(report_version))
-lf <- file.path(stem, reports$report_version, "res.rds")
+lf <- file.path(stem, reports_central$report_version, "res.rds")
 counterfactual_central <- pbapply::pblapply(lf, get_counterfactual)
 counterfactual_res <- do.call(rbind, counterfactual_central)
 saveRDS(counterfactual_res, paste0("analysis/data/derived/central_counterfactual_projections_", reports$date[1], ".rds"))
 
+reports_worst <- reports_here %>% filter(dur_R == 70) %>% group_by(state) %>% filter(report_version == max(report_version))
+lf <- file.path(stem, reports_worst$report_version, "res.rds")
+counterfactual_worst <- pbapply::pblapply(lf, get_counterfactual)
+counterfactual_res <- do.call(rbind, counterfactual_worst)
+saveRDS(counterfactual_res, paste0("analysis/data/derived/worst_counterfactual_projections_", reports$date[1], ".rds"))
+
+reports_best <- reports_here %>% filter(dur_R == 222) %>% group_by(state) %>% filter(report_version == max(report_version))
+lf <- file.path(stem, reports_best$report_version, "res.rds")
+counterfactual_best <- pbapply::pblapply(lf, get_counterfactual)
+counterfactual_res <- do.call(rbind, counterfactual_best)
+saveRDS(counterfactual_res, paste0("analysis/data/derived/best_counterfactual_projections_", reports$date[1], ".rds"))
+
 ind_res <- readRDS(paste0("analysis/data/derived/central_projections_", reports$date[1], ".rds"))
+counterfactual_res <- readRDS(paste0("analysis/data/derived/central_counterfactual_projections_", reports$date[1], ".rds"))
 
 vidf <- rbind(
 ind_res %>% filter(r_increase == "No Change") %>% mutate(scenario = "Baseline"),
@@ -396,7 +437,7 @@ da_gg_2 <- da_gg_2_df %>%
   scale_fill_viridis_d("Scenario:", end = 0.8) +
   scale_color_viridis_d("Scenario:", end = 0.8)
 
-deaths_averted_gg <- cowplot::plot_grid(da_gg_1, da_gg_2, ncol = 2)
+deaths_averted_gg <- cowplot::plot_grid(da_gg_1, da_gg_2, ncol = 2, labels = "AUTO")
 save_figs("deaths_averted", deaths_averted_gg, 10, 4)
 
 colSums(da_gg_2_df[,c("deaths_averted", "deaths_averted_min", "deaths_averted_max")], na.rm = TRUE)
@@ -442,6 +483,7 @@ da_gg_2_df <- vidf %>% group_by(date, scenario, replicate, state) %>%
   mutate(deaths_averted_max = `deaths_min_No Vaccines` - deaths_max_Baseline)
 
 da_gg_2 <- da_gg_2_df %>%
+  na.omit %>%
   split(.$state) %>%
   lapply(function(x) {
   ggplot(x, aes(date, cumsum(deaths_averted), ymin = cumsum(deaths_averted_min), ymax = cumsum(deaths_averted_max))) +
@@ -594,3 +636,15 @@ rtd <- do.call(rbind, lapply(rt, function(x) {
 rtd$state <- reports$state
 ggplot(rtd, aes(Rt_median, xmin = Rt_min, xmax = Rt_max, y = fct_reorder(state, Rt_median))) + geom_errorbarh() +
   ylab("") + xlab("Maximum Delta Rt")
+
+
+
+# sero comp 4th
+
+round4 <- read.csv("analysis/data/raw/round4.csv")
+round4$sero <- substr(round4$Cluster.Adjusted.Seroprevalence.....95..CI.,1,4)
+round4$sero <- as.numeric(substr(round4$Cluster.Adjusted.Seroprevalence.....95..CI.,1,4))
+left_join(sero_state, round4 %>% mutate(state = State.Union.Territory)) %>% na.omit %>%
+  ggplot(aes(all_perc*100, sero)) + geom_point() +
+  ggrepel::geom_text_repel(aes(label = state)) + geom_abline(slope = 1, intercept = 0) + theme_bw() + xlab("Model Predicted Seroprevalence") + ylab("Observed Seroporevalence")
+
