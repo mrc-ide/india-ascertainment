@@ -39,13 +39,6 @@ The structure within analysis is as follows:
             ├── raw_data/       # data obtained from elsewhere
             └── derived_data/   # data generated during the analysis
 
-### Compendium DOI:
-
-<http://dx.doi.org/xxxxxxx>
-
-The files at the URL above will generate the results as found in the
-publication.
-
 ### The R package
 
 This repository is organized as an R package. There are some R functions
